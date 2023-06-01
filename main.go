@@ -161,6 +161,8 @@ func main() {
 	// Output tokens as go map.
 	var b strings.Builder
 	fmt.Fprintln(&b, "package main")
+	fmt.Fprintln(&b, "")
+	fmt.Fprintln(&b, "// Taken from https://github.com/mwhittaker/emojis.")
 	fmt.Fprintln(&b, "var emojis = map[string][]string {")
 	for _, emoji := range emojis {
 		tokens := tokenize([]string{emoji.Name, emoji.Group, emoji.Subgroup})

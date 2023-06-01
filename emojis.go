@@ -1,5 +1,6 @@
 package main
 
+// Taken from https://github.com/mwhittaker/emojis.
 var emojis = map[string][]string{
 	"😀":                 {"emotion", "face", "grinning", "smileys", "smiling"},
 	"😃":                 {"big", "emotion", "eyes", "face", "grinning", "smileys", "smiling", "with"},
