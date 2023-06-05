@@ -30,19 +30,20 @@ var (
 // points: the cat code point, the zero width joiner code point, and the black
 // square codepoint.
 type emoji struct {
-	Grapheme string // the emoji or emoji sequence (e.g., 😀)
-	Codes    []rune // the code points in grapheme (e.g., [0x1F600])
-	Name     string // the name of the emoji (e.g., "grinning face")
-	Group    string // the emoji's group (e.g., "Smileys & Emotion")
-	Subgroup string // the emoji's subgroup (e.g., "face-smiling")
+	Grapheme string   // the emoji or emoji sequence (e.g., 😀)
+	Codes    []rune   // the code points in grapheme (e.g., [0x1F600])
+	Name     string   // the name of the emoji (e.g., "grinning face")
+	Group    string   // the emoji's group (e.g., "Smileys & Emotion")
+	Subgroup string   // the emoji's subgroup (e.g., "face-smiling")
+	Tags     []string // tags describing the emoji (e.g., "happy", "content")
 }
 
 // parse parses emojis from an emoji-test.txt file.
-func parse(r io.Reader) ([]emoji, error) {
+func parse(r io.Reader) ([]*emoji, error) {
 	group := ""
 	subgroup := ""
 
-	var emojis []emoji
+	var emojis []*emoji
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -92,7 +93,7 @@ func parse(r io.Reader) ([]emoji, error) {
 			return nil, fmt.Errorf("mismatched runes: got %v, want %v", runes, []rune(grapheme))
 		}
 
-		emoji := emoji{
+		emoji := &emoji{
 			Grapheme: grapheme,
 			Codes:    runes,
 			Name:     name,
@@ -119,6 +120,30 @@ func parseCodes(codes []string) ([]rune, error) {
 		runes = append(runes, rune(x))
 	}
 	return runes, nil
+}
+
+// parseTags parses tags from a data.json file.
+func parseTags(r io.Reader) (map[string][]string, error) {
+	type entry struct {
+		Emoji string
+		Tags  []string
+		Skins []entry
+	}
+
+	decoder := json.NewDecoder(r)
+	var entries []entry
+	if err := decoder.Decode(&entries); err != nil {
+		return nil, fmt.Errorf("json decode: %w", err)
+	}
+
+	tags := map[string][]string{}
+	for _, entry := range entries {
+		tags[entry.Emoji] = entry.Tags
+		for _, skin := range entry.Skins {
+			tags[skin.Emoji] = append(entry.Tags, skin.Tags...)
+		}
+	}
+	return tags, nil
 }
 
 // tokenize tokenizes a set of strings. For example, calling tokenize on the
@@ -149,6 +174,19 @@ func main() {
 		panic(err)
 	}
 
+	// Parse tags.
+	data, err := os.Open("data.json")
+	if err != nil {
+		panic(err)
+	}
+	tags, err := parseTags(data)
+	if err != nil {
+		panic(err)
+	}
+	for _, emoji := range emojis {
+		emoji.Tags = tags[emoji.Grapheme]
+	}
+
 	// Output the emojis as json.
 	bytes, err := json.MarshalIndent(emojis, "", "    ")
 	if err != nil {
@@ -165,7 +203,8 @@ func main() {
 	fmt.Fprintln(&b, "// Taken from https://github.com/mwhittaker/emojis.")
 	fmt.Fprintln(&b, "var emojis = map[string][]string {")
 	for _, emoji := range emojis {
-		tokens := tokenize([]string{emoji.Name, emoji.Group, emoji.Subgroup})
+		inputs := append(emoji.Tags, emoji.Name, emoji.Group, emoji.Subgroup)
+		tokens := tokenize(inputs)
 		formatted := make([]string, len(tokens))
 		for i, token := range tokens {
 			formatted[i] = fmt.Sprintf("%q", token)
